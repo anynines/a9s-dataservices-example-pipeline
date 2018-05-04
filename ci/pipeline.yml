@@ -13,6 +13,7 @@ resources:
 
 jobs:
 - name: update-env
+  serial: true
   plan:
   - get: ds-release
   - get: environment-config
@@ -30,3 +31,50 @@ jobs:
         path: environment-config/ci/scripts/verify_checksum.sh
       params:
         RELEASE_DIR: ./ds-release
+
+  - task: unzip-ds-releases
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: avarteqgmbh/pipeline-utils
+      inputs:
+      - name: ds-release
+      outputs:
+      - name: unzipped-ds-release
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          cd ds-release
+          tar -xvzf anynines-deployment-*.tgz
+          mv anynines-deployment ../unzipped-ds-release/
+
+  - task: upload-releases
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: avarteqgmbh/pipeline-utils
+      inputs:
+      - name: unzipped-ds-release
+      - name: environment-config
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          echo "BOSH releases before upload"
+          bosh releases
+          cd unzipped-ds-release/anynines-deployment/releases
+          for release in `ls *.tgz`; do bosh upload-release $release; done
+          echo "BOSH releases after upload"
+          bosh releases
+      params:
+        BOSH_ENVIRONMENT: ((bosh_target))
+        BOSH_CA_CERT: ((bosh_ca_cert))
+        BOSH_CLIENT: ((bosh_username))
+        BOSH_CLIENT_SECRET: ((bosh_password))
