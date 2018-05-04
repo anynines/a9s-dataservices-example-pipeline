@@ -1,0 +1,32 @@
+resources:
+- name: ds-release
+  type: s3
+  source:
+    bucket: anynines-bosh-releases
+    regexp: anynines-deployment-(.*).tgz
+    region_name: eu-west-1
+- name: environment-config
+  type: git
+  source:
+    uri: https://github.com/anynines/a9s-dataservices-example-pipeline.git
+    branch: master
+
+jobs:
+- name: update-env
+  plan:
+  - get: ds-release
+  - get: environment-config
+  - task: verify-release-checksum
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: avarteqgmbh/pipeline-utils
+      inputs:
+      - name: ds-release
+      - name: environment-config
+      run:
+        path: environment-config/ci/scripts/verify_checksum.sh
+      params:
+        RELEASE_DIR: ./ds-release
